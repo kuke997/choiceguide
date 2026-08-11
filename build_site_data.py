@@ -315,6 +315,23 @@ def generate_dashboard_data(categories, articles, pub_years):
     return hist
 
 
+GENERATED_AT_RE = re.compile(r'\s*"generatedAt": "[^"]*",?\s*')
+
+
+def write_if_changed(path, text):
+    """内容无变化时不写文件；比较时忽略 generatedAt 时间戳行，避免每次构建产生幻影变更"""
+    if os.path.exists(path):
+        try:
+            old = open(path, encoding="utf-8").read()
+            if GENERATED_AT_RE.sub("\n", old) == GENERATED_AT_RE.sub("\n", text):
+                return False
+        except Exception:
+            pass
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return True
+
+
 def build():
     data = json.load(open(JSON_PATH, encoding="utf-8"))
 
@@ -393,8 +410,7 @@ def build():
     }
     js = "/* 由 build_site_data.py 自动生成，请勿手动编辑 */\n"
     js += "window.SCRAPED_DATA = " + json.dumps(out, ensure_ascii=False, indent=2) + ";\n"
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        f.write(js)
+    write_if_changed(OUT_PATH, js)
 
     generate_article_pages(page_articles)
     removed = cleanup_orphans(used_names, used_image_names)

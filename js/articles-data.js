@@ -1,6 +1,6 @@
 /* 由 build_site_data.py 自动生成，请勿手动编辑 */
 window.SCRAPED_DATA = {
-  "generatedAt": "2026-08-11T17:48:32",
+  "generatedAt": "2026-08-11T18:12:16",
   "source": "https://activebeat.com",
   "categories": [
     {

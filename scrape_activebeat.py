@@ -292,11 +292,15 @@ def main():
         stats.append((cat["name"], len(fetched)))
         time.sleep(DELAY)
 
-    existing["generated_at"] = datetime.now().isoformat(timespec="seconds")
-    existing["source"] = BASE
-    os.makedirs(OUT_DIR, exist_ok=True)
-    with open(site_config.ARTICLES_JSON, "w", encoding="utf-8") as f:
-        json.dump(existing, f, ensure_ascii=False, indent=2)
+    changed = new_total > 0 or not existing["categories"]
+    if changed:
+        existing["generated_at"] = datetime.now().isoformat(timespec="seconds")
+        existing["source"] = BASE
+        os.makedirs(OUT_DIR, exist_ok=True)
+        with open(site_config.ARTICLES_JSON, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+    else:
+        print("无新增内容，跳过数据文件写入")
 
     print("\n===== 汇总 =====")
     for name, n in stats:
