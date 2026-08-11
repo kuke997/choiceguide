@@ -25,29 +25,19 @@ function Write-Log($msg, [switch]$IsError) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
     if ($IsError) { Write-Host $line -ForegroundColor Red }
     else          { Write-Host $line }
-    # 以 UTF-8 追加写入日志，避免中文乱码
     [System.IO.File]::AppendAllText($Log, $line + "`n", [System.Text.Encoding]::UTF8)
 }
 
-# 执行外部命令并返回 (exitCode, outputLines)
-function Invoke-External($cmd, $argsArray) {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $cmd
-    $psi.Arguments = $argsArray
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    $p = [System.Diagnostics.Process]::Start($psi)
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
-    $p.WaitForExit()
-    $lines = @()
-    if ($out) { $lines += $out.TrimEnd().Split("`n") }
-    if ($err) { $lines += $err.TrimEnd().Split("`n") }
-    return $p.ExitCode, $lines
+# 安全执行会产生 stderr 的外部命令：临时关闭 Stop，手动检查退出码
+function Invoke-Logged($label, [scriptblock]$cmd) {
+    Write-Log $label
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"   # 防止 git/wrangler 的 stderr 触发终止错误
+    $output = & $cmd 2>&1
+    $ec = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    $output | ForEach-Object { Write-Log "  $($_)" }
+    return $ec
 }
 
 # --- 确保目录存在 ---
@@ -79,13 +69,10 @@ try {
     $changed = git status --porcelain
     if ($changed) {
         git add -A
-        $commitMsg = "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-        $ec, $lines = Invoke-External "git" "commit -m `"$commitMsg`""
-        $lines | ForEach-Object { Write-Log "  git: $_" }
+        $ec = Invoke-Logged "  git commit" { git commit -m "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
         if ($ec -ne 0) { throw "git commit 失败 (exit=$ec)" }
 
-        $ec, $lines = Invoke-External "git" "push origin master"
-        $lines | ForEach-Object { Write-Log "  git: $_" }
+        $ec = Invoke-Logged "  git push" { git push origin master }
         if ($ec -ne 0) { throw "git push 失败 (exit=$ec)" }
         Write-Log "已推送 $(($changed -split "`n").Count) 个文件变更"
     } else {
@@ -99,8 +86,7 @@ try {
     }
     $hash = git rev-parse HEAD
     $msg  = git log -1 --pretty=%B
-    $ec, $lines = Invoke-External "wrangler" "pages deploy . --project-name choiceguide --branch master --commit-hash `"$hash`" --commit-message `"$msg`""
-    $lines | ForEach-Object { Write-Log "  wrangler: $_" }
+    $ec = Invoke-Logged "  wrangler deploy" { wrangler pages deploy . --project-name choiceguide --branch master --commit-hash $hash --commit-message $msg }
     if ($ec -ne 0) { throw "wrangler pages deploy 失败 (exit=$ec)" }
 
     $Dur = [math]::Round(((Get-Date) - $Start).TotalSeconds, 1)
