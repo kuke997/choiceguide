@@ -25,7 +25,29 @@ function Write-Log($msg, [switch]$IsError) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
     if ($IsError) { Write-Host $line -ForegroundColor Red }
     else          { Write-Host $line }
-    Add-Content -Path $Log -Value $line -ErrorAction SilentlyContinue
+    # 以 UTF-8 追加写入日志，避免中文乱码
+    [System.IO.File]::AppendAllText($Log, $line + "`n", [System.Text.Encoding]::UTF8)
+}
+
+# 执行外部命令并返回 (exitCode, outputLines)
+function Invoke-External($cmd, $argsArray) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $cmd
+    $psi.Arguments = $argsArray
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $out = $p.StandardOutput.ReadToEnd()
+    $err = $p.StandardError.ReadToEnd()
+    $p.WaitForExit()
+    $lines = @()
+    if ($out) { $lines += $out.TrimEnd().Split("`n") }
+    if ($err) { $lines += $err.TrimEnd().Split("`n") }
+    return $p.ExitCode, $lines
 }
 
 # --- 确保目录存在 ---
@@ -57,13 +79,14 @@ try {
     $changed = git status --porcelain
     if ($changed) {
         git add -A
-        $commitMsg = git commit -m "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
-        $commitMsg | ForEach-Object { Write-Log "  git: $_" }
-        if ($LASTEXITCODE -ne 0) { throw "git commit 失败 (exit=$LASTEXITCODE)" }
+        $commitMsg = "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+        $ec, $lines = Invoke-External "git" "commit -m `"$commitMsg`""
+        $lines | ForEach-Object { Write-Log "  git: $_" }
+        if ($ec -ne 0) { throw "git commit 失败 (exit=$ec)" }
 
-        $pushOutput = git push origin master 2>&1
-        $pushOutput | ForEach-Object { Write-Log "  git: $_" }
-        if ($LASTEXITCODE -ne 0) { throw "git push 失败 (exit=$LASTEXITCODE)" }
+        $ec, $lines = Invoke-External "git" "push origin master"
+        $lines | ForEach-Object { Write-Log "  git: $_" }
+        if ($ec -ne 0) { throw "git push 失败 (exit=$ec)" }
         Write-Log "已推送 $(($changed -split "`n").Count) 个文件变更"
     } else {
         Write-Log "无内容变更，跳过提交推送"
@@ -74,11 +97,11 @@ try {
     if (-not $Env:CLOUDFLARE_API_TOKEN) {
         Write-Log "未找到 CLOUDFLARE_API_TOKEN，尝试使用当前 wrangler OAuth 登录状态" -IsError
     }
-    $deploy = wrangler pages deploy . --project-name choiceguide --branch master `
-        --commit-hash (git rev-parse HEAD) `
-        --commit-message (git log -1 --pretty=%B) 2>&1
-    $deploy | ForEach-Object { Write-Log "  wrangler: $_" }
-    if ($LASTEXITCODE -ne 0) { throw "wrangler pages deploy 失败 (exit=$LASTEXITCODE)" }
+    $hash = git rev-parse HEAD
+    $msg  = git log -1 --pretty=%B
+    $ec, $lines = Invoke-External "wrangler" "pages deploy . --project-name choiceguide --branch master --commit-hash `"$hash`" --commit-message `"$msg`""
+    $lines | ForEach-Object { Write-Log "  wrangler: $_" }
+    if ($ec -ne 0) { throw "wrangler pages deploy 失败 (exit=$ec)" }
 
     $Dur = [math]::Round(((Get-Date) - $Start).TotalSeconds, 1)
     Write-Log "===== 完成，耗时 ${Dur}s ====="
