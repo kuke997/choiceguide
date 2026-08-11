@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ChoiceGuide 导购指南 - 专业客观的购物导购网站，涵盖数码、家居、美妆、食品等品类，帮你选对不买贵。">
+  <title>ChoiceGuide - 你的购物导购指南</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark">✓</span>
+        <span class="logo-text">ChoiceGuide</span>
+      </a>
+      <nav class="main-nav" id="mainNav">
+        <a href="#featured" class="nav-link active">首页</a>
+        <a href="#categories" class="nav-link">分类</a>
+        <a href="#latest" class="nav-link">最新文章</a>
+        <a href="#about" class="nav-link">关于我们</a>
+      </nav>
+      <button class="nav-toggle" id="navToggle" aria-label="打开菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- 主视觉 Hero -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <h1 class="hero-title">选对，不买贵</h1>
+      <p class="hero-subtitle">专业客观的购物导购指南，帮你在海量商品中做出正确选择</p>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索你关心的商品，如：手机、咖啡机、椅子…" aria-label="搜索文章">
+        <button id="searchBtn" class="btn btn-primary">搜索</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 热门精选 -->
+  <section class="section" id="featured">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">热门精选</h2>
+        <p class="section-desc">本月最受关注的导购文章</p>
+      </div>
+      <div class="card-grid" id="featuredGrid"></div>
+    </div>
+  </section>
+
+  <!-- 分类导航 -->
+  <section class="section section-alt" id="categories">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">按分类浏览</h2>
+        <p class="section-desc">快速定位你想要的品类</p>
+      </div>
+      <div class="category-grid" id="categoryGrid"></div>
+    </div>
+  </section>
+
+  <!-- 最新文章 -->
+  <section class="section" id="latest">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">最新文章</h2>
+        <p class="section-desc">持续更新的选购干货</p>
+      </div>
+      <div class="article-list" id="articleList"></div>
+    </div>
+  </section>
+
+  <!-- 关于我们 -->
+  <section class="section section-alt" id="about">
+    <div class="container">
+      <div class="about-box">
+        <h2 class="section-title">关于 ChoiceGuide</h2>
+        <p>ChoiceGuide 是一群热爱研究产品参数的购物达人创建的内容网站。</p>
+        <p>我们的原则：<strong>只推荐亲自研究过、数据经得起推敲的产品</strong>。不接暗广，不收厂商红包，所有结论基于公开实测数据与真实用户反馈。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="logo-mark">✓</span>
+        <span class="logo-text">ChoiceGuide</span>
+        <p class="footer-desc">选对，不买贵。你的私人购物导购指南。</p>
+      </div>
+      <div class="footer-links">
+        <a href="#featured">热门精选</a>
+        <a href="#categories">分类浏览</a>
+        <a href="#latest">最新文章</a>
+        <a href="#about">关于我们</a>
+      </div>
+      <p class="copyright">© 2026 choiceguide.xyz · 本站内容仅供参考，理性消费。</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
