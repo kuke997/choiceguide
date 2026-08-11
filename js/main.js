@@ -1,141 +1,180 @@
-/* ===== ChoiceGuide 前端逻辑 ===== */
+/* ===== ChoiceGuide 前端逻辑（对齐参考站 activebeat 版式） ===== */
 
-// 图片使用站点生成的配图地址（prompt 由 encodeURIComponent 编码，保证 URL 合法）
-function articleImage(prompt) {
-  return (
-    "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=" +
-    encodeURIComponent(prompt) +
-    "&image_size=landscape_16_9"
-  );
+// 文章数据：由爬取结果生成（见 js/articles-data.js，源数据在 scraped/articles.json）
+const articles = (window.SCRAPED_DATA && window.SCRAPED_DATA.articles) || [];
+const categories = (window.SCRAPED_DATA && window.SCRAPED_DATA.categories) || [];
+
+// 按发布时间倒序排列（最新在前）
+articles.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+// 分类名 -> 图标
+const categoryIcons = Object.fromEntries(categories.map((c) => [c.name, c.icon]));
+function iconOf(category) {
+  return categoryIcons[category] || "📄";
+}
+function authorsOf(a) {
+  return a.authors && a.authors.length ? a.authors.join(", ") : "";
+}
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+// 配图优先，无图时回退到渐变封面
+function thumbHtml(a, imgCls, fallbackCls, iconCls) {
+  if (a.image) {
+    return `<img class="${imgCls}" src="${a.image}" alt="${esc(a.title)}" loading="lazy">`;
+  }
+  return `<div class="${fallbackCls}" style="background:${a.cover}"><span class="${iconCls}">${iconOf(a.category)}</span></div>`;
 }
 
-// 文章数据：以后更新导购文章，只需在此处新增/修改对象即可
-const articles = [
-  {
-    id: 1,
-    title: "2026 年手机选购指南：旗舰机与性价比机怎么选？",
-    excerpt: "从处理器、屏幕、影像到续航，用数据拆解每个价位的真实差距，拒绝参数陷阱。",
-    category: "数码",
-    featured: true,
-    date: "2026-08-08",
-    imagePrompt:
-      "modern flagship smartphone lying on a minimalist desk with soft studio lighting, product photography, clean background",
-  },
-  {
-    id: 2,
-    title: "笔记本电脑避坑指南：轻薄本 / 全能本 / 游戏本",
-    excerpt: "三大品类定位完全不同，先搞清楚需求再下单，否则多花几千块买了个负担。",
-    category: "数码",
-    featured: true,
-    date: "2026-08-06",
-    imagePrompt:
-      "slim laptop half open on a bright wooden desk, minimalist workspace, warm natural light, product photography",
-  },
-  {
-    id: 3,
-    title: "家用咖啡机怎么选？意式半自动 vs 全自动实测对比",
-    excerpt: "500 元到 5000 元跨度巨大，我们实测了主流机型，告诉你钱到底花在哪。",
-    category: "家居",
-    featured: true,
-    date: "2026-08-03",
-    imagePrompt:
-      "espresso coffee machine brewing a cup on a kitchen counter, cozy morning light, food product photography",
-  },
-  {
-    id: 4,
-    title: "人体工学椅选购：腰托、头枕、网布，关键参数一篇讲透",
-    excerpt: "久坐党的命是椅子给的。从调节范围到坐垫深度，手把手教你挑对型号。",
-    category: "家居",
-    featured: false,
-    date: "2026-07-30",
-    imagePrompt:
-      "modern ergonomic office chair in a bright home office, clean minimal interior, soft daylight",
-  },
-  {
-    id: 5,
-    title: "护肤成分入门：烟酰胺、A 醇、玻尿酸，到底谁有效？",
-    excerpt: "成分表不会骗人，但浓度和配方会。看懂这 10 个成分，护肤不再交智商税。",
-    category: "美妆",
-    featured: false,
-    date: "2026-07-27",
-    imagePrompt:
-      "cosmetic serum bottles with droppers on a soft pastel background, beauty product photography, minimalist",
-  },
-  {
-    id: 6,
-    title: "空气炸锅 12 款横向测评：容量、功率、实测口感全记录",
-    excerpt: "百元机和千元机的差距到底有多大？我们用 30 斤食材做完了这场测试。",
-    category: "食品",
-    featured: false,
-    date: "2026-07-24",
-    imagePrompt:
-      "air fryer on a modern kitchen counter with fresh ingredients around, bright food photography",
-  },
-];
-
-const categories = [
-  { name: "数码", icon: "📱" },
-  { name: "家居", icon: "🛋️" },
-  { name: "美妆", icon: "💄" },
-  { name: "食品", icon: "🍳" },
-  { name: "生活", icon: "🏡" },
-  { name: "全部", icon: "✨" },
-];
-
-/* ===== 渲染函数 ===== */
+/* ===== 1. 精选区：大卡 + 侧边两张小卡 ===== */
 function renderFeatured() {
   const grid = document.getElementById("featuredGrid");
   const featured = articles.filter((a) => a.featured);
-  grid.innerHTML = featured
-    .map(
-      (a) => `
-    <article class="card" data-category="${a.category}">
-      <img class="card-img" src="${articleImage(a.imagePrompt)}" alt="${a.title}" loading="lazy">
-      <div class="card-body">
-        <span class="card-tag">${a.category}</span>
-        <h3 class="card-title">${a.title}</h3>
-        <p class="card-excerpt">${a.excerpt}</p>
-      </div>
-    </article>`
-    )
-    .join("");
+  const [big, ...rest] = featured;
+  let html = "";
+  if (big) {
+    html += `
+    <div class="feature-card">
+      <a href="${big.page}">${thumbHtml(big, "feature-card__img", "feature-card__thumb", "feature-card__thumb-icon")}</a>
+      <a class="post-category" href="#section-health-news">${big.category}</a>
+      <h1 class="feature-card__title"><a href="${big.page}">${big.title}</a></h1>
+      <p class="post-meta">By ${authorsOf(big) || "ChoiceGuide"} · ${big.read_time} · ${big.date}</p>
+      <p class="feature-card__excerpt">${big.excerpt}</p>
+    </div>`;
+  }
+  if (rest.length) {
+    html += `<div class="feature-side">`;
+    html += rest
+      .map(
+        (a) => `
+      <div class="feature-card--small">
+        <a href="${a.page}">${thumbHtml(a, "feature-card--small__img", "feature-card--small__thumb", "feature-card--small__thumb-icon")}</a>
+        <a class="post-category" href="#section-health-news">${a.category}</a>
+        <h3 class="feature-card--small__title"><a href="${a.page}">${a.title}</a></h3>
+        <p class="post-meta">${a.read_time}</p>
+      </div>`
+      )
+      .join("");
+    html += `</div>`;
+  }
+  grid.innerHTML = html;
 }
 
+/* ===== 2. Health A-Z 瓦片 ===== */
 function renderCategories() {
   const grid = document.getElementById("categoryGrid");
   grid.innerHTML = categories
     .map((c) => {
       const count =
-        c.name === "全部"
+        c.name === "All"
           ? articles.length
           : articles.filter((a) => a.category === c.name).length;
       return `
     <div class="category-item" data-category="${c.name}">
       <span class="category-icon">${c.icon}</span>
-      <div class="category-name">${c.name}</div>
-      <div class="category-count">${count} 篇文章</div>
+      <div>
+        <div class="category-name">${c.name}</div>
+        <div class="category-count">${count} articles</div>
+      </div>
     </div>`;
     })
     .join("");
 }
 
+/* ===== 3. 分类内容区块 ===== */
+function verticalCard(a) {
+  return `
+    <article class="post-card">
+      <a href="${a.page}">${thumbHtml(a, "post-card__img", "post-card__thumb", "post-card__thumb-icon")}</a>
+      <a class="post-category" href="#latest">${a.category}</a>
+      <h3 class="post-card__title"><a href="${a.page}">${a.title}</a></h3>
+      <p class="post-card__excerpt">${a.excerpt}</p>
+      <p class="post-card__meta">By ${authorsOf(a) || "ChoiceGuide"} · ${a.read_time}</p>
+    </article>`;
+}
+
+function horizontalRow(a) {
+  return `
+    <div class="post-row">
+      <a href="${a.page}">${thumbHtml(a, "post-row__img", "post-row__thumb", "post-row__thumb-icon")}</a>
+      <div>
+        <a class="post-category" href="#latest">${a.category}</a>
+        <h4 class="post-row__title"><a href="${a.page}">${a.title}</a></h4>
+        <p class="post-row__meta">${a.read_time}</p>
+      </div>
+    </div>`;
+}
+
+function renderShowcase() {
+  const container = document.getElementById("categorySections");
+  const byCat = (name, n) => articles.filter((a) => a.category === name).slice(0, n);
+
+  const sections = [
+    { id: "section-health-news", subtitle: "Medically Reviewed", title: "Health News and Info", cats: ["Health News"], n: 6 },
+    { id: "section-diet", subtitle: "Healthy Food", title: "Diet & Nutrition", cats: ["Diet & Nutrition"], n: 6 },
+    { id: "section-fitness", subtitle: "Workout & Advice", title: "Fitness", cats: ["Fitness"], n: 6 },
+  ];
+
+  let html = "";
+  for (const s of sections) {
+    const items = [];
+    for (const c of s.cats) items.push(...byCat(c, s.n));
+    const cards = items.slice(0, s.n).map(verticalCard).join("");
+    html += `
+    <div class="section-block" id="${s.id}">
+      <div class="section-head">
+        <p class="section-subtitle">${s.subtitle}</p>
+        <h2 class="section-title">${s.title}</h2>
+      </div>
+      <div class="showcase-grid">${cards}</div>
+    </div>`;
+  }
+
+  // Your Health：分人群横向小卡
+  const subCats = [
+    ["Men", "Men"],
+    ["Women", "Women"],
+    ["Children", "Children"],
+    ["Senior", "Senior"],
+  ];
+  let yh = `
+    <div class="section-block" id="section-your-health">
+      <div class="section-head">
+        <p class="section-subtitle">For Everyone</p>
+        <h2 class="section-title">Your Health</h2>
+      </div>
+      <div class="showcase-list">`;
+  for (const [name] of subCats) {
+    const rows = byCat(name, 2).map(horizontalRow).join("");
+    yh += `<h3 class="showcase-sub">${name}</h3>${rows}`;
+  }
+  yh += `</div></div>`;
+
+  container.innerHTML = html + yh;
+}
+
+/* ===== 4. 最新文章列表 ===== */
 function renderArticleList(list) {
   const container = document.getElementById("articleList");
   if (!list.length) {
-    container.innerHTML = '<div class="empty-tip">没有找到相关文章，换个关键词试试。</div>';
+    container.innerHTML =
+      '<div class="empty-tip">No articles found. Try a different keyword.</div>';
     return;
   }
   container.innerHTML = list
     .map(
       (a) => `
-    <div class="article-row" data-category="${a.category}">
-      <img class="article-row-img" src="${articleImage(a.imagePrompt)}" alt="${a.title}" loading="lazy">
-      <div class="article-row-info">
-        <h3 class="article-row-title">${a.title}</h3>
-        <p class="article-row-excerpt">${a.excerpt}</p>
-        <div class="article-row-meta">${a.category} · ${a.date}</div>
+    <a class="article-row-link" href="${a.page}">
+      <div class="article-row" data-category="${a.category}">
+        ${thumbHtml(a, "article-row__img", "article-row-cover", "article-row-cover-icon")}
+        <div class="article-row-info">
+          <span class="article-row-category">${a.category}</span>
+          <h3 class="article-row-title">${a.title}</h3>
+          <p class="article-row-excerpt">${a.excerpt}</p>
+          <div class="article-row-meta">By ${authorsOf(a) || "ChoiceGuide"} · ${a.read_time} · ${a.date}</div>
+        </div>
       </div>
-    </div>`
+    </a>`
     )
     .join("");
 }
@@ -145,7 +184,7 @@ function filterArticles(keyword, category) {
   const kw = (keyword || "").trim().toLowerCase();
   return articles.filter((a) => {
     const matchKw = !kw || (a.title + a.excerpt + a.category).toLowerCase().includes(kw);
-    const matchCat = !category || category === "全部" || a.category === category;
+    const matchCat = !category || category === "All" || a.category === category;
     return matchKw && matchCat;
   });
 }
@@ -161,6 +200,7 @@ function applyFilter() {
 function initSearch() {
   const input = document.getElementById("searchInput");
   const btn = document.getElementById("searchBtn");
+  const navBtn = document.getElementById("navSearchBtn");
 
   function doSearch() {
     currentKeyword = input.value;
@@ -172,12 +212,22 @@ function initSearch() {
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doSearch();
   });
+  navBtn.addEventListener("click", () => {
+    currentKeyword = "";
+    currentCategory = "";
+    input.value = "";
+    applyFilter();
+    document.getElementById("latest").scrollIntoView({ behavior: "smooth" });
+    input.focus();
+  });
 }
 
 function initCategories() {
   document.getElementById("categoryGrid").addEventListener("click", (e) => {
     const item = e.target.closest(".category-item");
     if (!item) return;
+    currentKeyword = "";
+    document.getElementById("searchInput").value = "";
     currentCategory = item.dataset.category;
     applyFilter();
     document.getElementById("latest").scrollIntoView({ behavior: "smooth" });
@@ -194,6 +244,7 @@ function initMobileNav() {
 document.addEventListener("DOMContentLoaded", () => {
   renderFeatured();
   renderCategories();
+  renderShowcase();
   renderArticleList(articles);
   initSearch();
   initCategories();
