@@ -57,8 +57,12 @@ try {
     $changed = git status --porcelain
     if ($changed) {
         git add -A
-        git commit -m "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-Null
-        git push origin master 2>&1 | Out-Null
+        $commitMsg = git commit -m "auto: 定时爬取更新 $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+        $commitMsg | ForEach-Object { Write-Log "  git: $_" }
+        if ($LASTEXITCODE -ne 0) { throw "git commit 失败 (exit=$LASTEXITCODE)" }
+
+        $pushOutput = git push origin master 2>&1
+        $pushOutput | ForEach-Object { Write-Log "  git: $_" }
         if ($LASTEXITCODE -ne 0) { throw "git push 失败 (exit=$LASTEXITCODE)" }
         Write-Log "已推送 $(($changed -split "`n").Count) 个文件变更"
     } else {
