@@ -1,0 +1,13 @@
+name = "choiceguide-track"
+main = "src/index.js"
+compatibility_date = "2026-08-12"
+account_id = "0a8b0edb855ee05023390e7fd7117650"
+
+# D1 数据库绑定（database_id 在 wrangler d1 create 后回填）
+[[d1_databases]]
+binding = "DB"
+database_name = "choiceguide-track"
+database_id = "b1c88b91-5a78-4a11-851e-e3bed450a3b3"
+
+# 自定义域名后续在 Cloudflare 控制台手动绑定：track.choiceguide.xyz
+# 当前先用默认的 workers.dev 子域名
