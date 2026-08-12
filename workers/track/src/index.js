@@ -5,10 +5,16 @@
  *   POST /track      网站埋点上报（公开，无 IP 限制；校验共享 Token + payload 大小 + 字段合法性）
  *   GET  /analytics  访问统计聚合（需 X-API-Key 头，密钥只存在本机 server.py）
  *
+ * 定时任务：
+ *   Cron 每 2 天执行一次，删除 2 天前的 track_events 记录，防止 D1 数据无限增长。
+ *
  * 数据存储在 Cloudflare D1，不经过本地服务器。
  */
 const MAX_BODY = 2048; // 正常浏览器上报远小于此，超过直接丢弃
 const VALID_TYPES = new Set(["pageview", "dwell", "click", "ad_click"]);
+// 保留最近 2 天的埋点数据（单位：秒）
+const RETENTION_DAYS = 2;
+const RETENTION_SECONDS = RETENTION_DAYS * 24 * 60 * 60;
 
 export default {
   async fetch(request, env, ctx) {
@@ -25,6 +31,10 @@ export default {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(cleanupOldEvents(env));
   },
 };
 
@@ -84,6 +94,17 @@ async function handleTrack(request, env, ctx) {
       .run()
   );
   return resp204();
+}
+
+async function cleanupOldEvents(env) {
+  const cutoff = Math.floor(Date.now() / 1000) - RETENTION_SECONDS;
+  try {
+    await env.DB.prepare("DELETE FROM track_events WHERE ts < ?")
+      .bind(cutoff)
+      .run();
+  } catch (e) {
+    console.error("cleanupOldEvents failed:", e);
+  }
 }
 
 async function handleAnalytics(request, env) {
