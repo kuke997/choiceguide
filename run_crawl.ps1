@@ -1,4 +1,4 @@
-﻿﻿# =========================================================
+﻿# =========================================================
 # ChoiceGuide 定时爬取与部署脚本（方案 A：本地电脑 + Direct Upload）
 # 流程：增量爬取 -> 下载配图 -> 构建站点 -> 推送到 GitHub -> 部署到 Cloudflare Pages
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File c:\web01\run_crawl.ps1
@@ -25,9 +25,8 @@ $Env:CLOUDFLARE_API_TOKEN = if ($env:CLOUDFLARE_API_TOKEN) {
 $Env:CLOUDFLARE_ACCOUNT_ID = "0a8b0edb855ee05023390e7fd7117650"
 
 function Write-Log($msg, [switch]$IsError) {
+    # 只写日志文件（UTF-8），不输出到 stdout，避免重定向到文件时 GBK 乱码
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
-    if ($IsError) { Write-Host $line -ForegroundColor Red }
-    else          { Write-Host $line }
     [System.IO.File]::AppendAllText($Log, $line + "`n", [System.Text.Encoding]::UTF8)
 }
 
