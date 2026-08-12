@@ -1,4 +1,4 @@
-﻿# =========================================================
+﻿﻿# =========================================================
 # ChoiceGuide 定时爬取与部署脚本（方案 A：本地电脑 + Direct Upload）
 # 流程：增量爬取 -> 下载配图 -> 构建站点 -> 推送到 GitHub -> 部署到 Cloudflare Pages
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File c:\web01\run_crawl.ps1
