@@ -21,6 +21,9 @@ $Env:CLOUDFLARE_API_TOKEN = if ($env:CLOUDFLARE_API_TOKEN) {
     ""
 }
 
+# 显式指定账号 ID（token 缺 account:read 时 wrangler 无法自动发现账号）
+$Env:CLOUDFLARE_ACCOUNT_ID = "0a8b0edb855ee05023390e7fd7117650"
+
 function Write-Log($msg, [switch]$IsError) {
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
     if ($IsError) { Write-Host $line -ForegroundColor Red }
