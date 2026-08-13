@@ -43,11 +43,13 @@
   });
   window.addEventListener("pagehide", reportDwell);
 
-  // 3) 点击量（文章/页面链接点击 + 广告点击）
-  // 广告为点击任意处跳转型（iclick 弹窗/跳转），页面无可见广告横幅，
-  // 因此所有页面点击都记为广告点击 ad_click；站内文章链接点击另计为 click。
-  // 使用捕获阶段监听，确保在广告脚本劫持点击/跳转之前先完成上报。
-  // 同时监听 click 与 pointerdown（兼容被 preventDefault 的点击），用时间戳去重。
+  // 3) 真实广告点击统计
+  // 广告为点击跳转型（iclick）：点击页面任意处可能跳转到外部广告域名，
+  // 页面本身没有可见广告横幅。仅在实际触发广告跳转/弹窗时统计 ad_click：
+  //   a) 点击站内文章链接 (.html)        -> click
+  //   b) 点击外部域名链接 (target=_blank 等) -> ad_click
+  //   c) 广告脚本 window.open 外部域名    -> ad_click（popunder 弹窗）
+  //   d) 空白点击后页面发生跳转/卸载       -> ad_click（redirect 跳转型）
   var lastClickTs = 0;
   function onAnyClick(e) {
     var now = Date.now();
@@ -56,13 +58,41 @@
     var a = e.target && e.target.closest ? e.target.closest("a") : null;
     var href = (a && a.getAttribute("href")) || "";
     var isArticle = /\.html/.test(href);
+    var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.hostname) === -1;
     if (isArticle) {
+      // 站内文章导航，正常点击
       send({ type: "click", page: page, target: href });
+      lastNonArticleClick = 0;
+    } else if (isExternal) {
+      // 点击外部链接（广告落地页），直接统计
+      send({ type: "ad_click", page: page, target: href });
+      lastNonArticleClick = 0;
+    } else {
+      // 空白/非链接点击：若随后页面跳转（redirect 广告），在 pagehide 时补报
+      lastNonArticleClick = now;
     }
-    // 无论点击什么位置，都视为一次广告触发
-    send({ type: "ad_click", page: page, target: href || "page-click" });
   }
+  var lastNonArticleClick = 0;
   document.addEventListener("click", onAnyClick, true);
   // 兼容点击被广告脚本 preventDefault 的场景：pointerdown 在 click 之前触发
   document.addEventListener("pointerdown", onAnyClick, true);
+
+  // c) popunder 广告：广告脚本通过 window.open 打开外部广告页
+  var _open = window.open;
+  window.open = function (url) {
+    try {
+      if (typeof url === "string" && /^https?:\/\//i.test(url) && url.indexOf(location.hostname) === -1) {
+        send({ type: "ad_click", page: page, target: url });
+      }
+    } catch (e) {}
+    return _open.apply(this, arguments);
+  };
+
+  // d) redirect 广告：空白点击后页面发生跳转（pagehide），补报 ad_click
+  window.addEventListener("pagehide", function () {
+    if (lastNonArticleClick && Date.now() - lastNonArticleClick < 3000) {
+      send({ type: "ad_click", page: page, target: "redirect-ad" });
+    }
+    lastNonArticleClick = 0;
+  });
 })();
