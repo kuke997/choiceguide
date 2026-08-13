@@ -3,7 +3,8 @@
  *
  * 接口：
  *   POST /track      网站埋点上报（公开，无 IP 限制；校验共享 Token + payload 大小 + 字段合法性）
- *   GET  /analytics  访问统计聚合（需 X-API-Key 头，密钥只存在本机 server.py）
+ *   GET  /analytics  访问统计聚合（需 X-API-Key 头，内部兼容）
+ *   GET  /api/stats  对外统计 API（需 X-API-Key 头或 ?key= 参数；支持 ?days=N 最近 N 天）
  *
  * 定时任务：
  *   Cron 每 2 天执行一次，删除 2 天前的 track_events 记录，防止 D1 数据无限增长。
@@ -24,7 +25,7 @@ export default {
     if (path === "/track" && request.method === "POST") {
       return handleTrack(request, env, ctx);
     }
-    if (path === "/analytics" && request.method === "GET") {
+    if ((path === "/analytics" || path === "/api/stats") && request.method === "GET") {
       return handleAnalytics(request, env);
     }
     return new Response(JSON.stringify({ ok: false, error: "not found" }), {
@@ -108,9 +109,24 @@ async function cleanupOldEvents(env) {
 }
 
 async function handleAnalytics(request, env) {
-  if (request.headers.get("X-API-Key") !== env.ANALYTICS_KEY) {
-    return new Response("Forbidden", { status: 403 });
+  // 鉴权：X-API-Key 头 或 ?key= 查询参数（便于简单项目/脚本调用）
+  const url = new URL(request.url);
+  const key = request.headers.get("X-API-Key") || url.searchParams.get("key") || "";
+  if (key !== env.ANALYTICS_KEY && key !== env.API_STATS_KEY) {
+    return new Response(JSON.stringify({ ok: false, error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
+
+  // 可选参数：days=N 只统计最近 N 天（默认全部）
+  let since = 0;
+  const days = parseInt(url.searchParams.get("days") || "0", 10);
+  if (days > 0) {
+    since = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+  }
+  const timeFilter = since > 0 ? " AND ts >= ?" : "";
+  const bindSince = since > 0 ? [since] : [];
 
   const stats = {
     pageviews: 0,
@@ -126,6 +142,7 @@ async function handleAnalytics(request, env) {
     adClicksByTarget: {},
     ips: {},
     ipDetails: [],
+    generatedAt: new Date().toISOString(),
   };
 
   const [
@@ -141,17 +158,17 @@ async function handleAnalytics(request, env) {
     ipRows,
     ipDetailRows,
   ] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='pageview'").first(),
-    env.DB.prepare("SELECT COUNT(DISTINCT ip) AS c FROM track_events WHERE type='pageview'").first(),
-    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='click'").first(),
-    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='ad_click'").first(),
-    env.DB.prepare("SELECT COALESCE(SUM(dur),0) AS s, COUNT(*) AS c FROM track_events WHERE type='dwell'").first(),
-    env.DB.prepare("SELECT strftime('%Y-%m-%d', ts, 'unixepoch') AS day, COUNT(*) AS c FROM track_events WHERE type='pageview' GROUP BY day ORDER BY day").all(),
-    env.DB.prepare("SELECT page, COUNT(*) AS c FROM track_events WHERE type='pageview' GROUP BY page ORDER BY c DESC LIMIT 10").all(),
-    env.DB.prepare("SELECT target, COUNT(*) AS c FROM track_events WHERE type='click' GROUP BY target ORDER BY c DESC LIMIT 10").all(),
-    env.DB.prepare("SELECT target, COUNT(*) AS c FROM track_events WHERE type='ad_click' GROUP BY target ORDER BY c DESC LIMIT 10").all(),
-    env.DB.prepare("SELECT ip, COUNT(*) AS c FROM track_events WHERE type='pageview' GROUP BY ip ORDER BY c DESC LIMIT 15").all(),
-    env.DB.prepare("SELECT ip, country, city, region, isp, COUNT(*) AS c, MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM track_events WHERE type='pageview' GROUP BY ip ORDER BY c DESC").all(),
+    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='pageview'" + timeFilter).bind(...bindSince).first(),
+    env.DB.prepare("SELECT COUNT(DISTINCT ip) AS c FROM track_events WHERE type='pageview'" + timeFilter).bind(...bindSince).first(),
+    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='click'" + timeFilter).bind(...bindSince).first(),
+    env.DB.prepare("SELECT COUNT(*) AS c FROM track_events WHERE type='ad_click'" + timeFilter).bind(...bindSince).first(),
+    env.DB.prepare("SELECT COALESCE(SUM(dur),0) AS s, COUNT(*) AS c FROM track_events WHERE type='dwell'" + timeFilter).bind(...bindSince).first(),
+    env.DB.prepare("SELECT strftime('%Y-%m-%d', ts, 'unixepoch') AS day, COUNT(*) AS c FROM track_events WHERE type='pageview'" + timeFilter + " GROUP BY day ORDER BY day").bind(...bindSince).all(),
+    env.DB.prepare("SELECT page, COUNT(*) AS c FROM track_events WHERE type='pageview'" + timeFilter + " GROUP BY page ORDER BY c DESC LIMIT 10").bind(...bindSince).all(),
+    env.DB.prepare("SELECT target, COUNT(*) AS c FROM track_events WHERE type='click'" + timeFilter + " GROUP BY target ORDER BY c DESC LIMIT 10").bind(...bindSince).all(),
+    env.DB.prepare("SELECT target, COUNT(*) AS c FROM track_events WHERE type='ad_click'" + timeFilter + " GROUP BY target ORDER BY c DESC LIMIT 10").bind(...bindSince).all(),
+    env.DB.prepare("SELECT ip, COUNT(*) AS c FROM track_events WHERE type='pageview'" + timeFilter + " GROUP BY ip ORDER BY c DESC LIMIT 15").bind(...bindSince).all(),
+    env.DB.prepare("SELECT ip, country, city, region, isp, COUNT(*) AS c, MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM track_events WHERE type='pageview'" + timeFilter + " GROUP BY ip ORDER BY c DESC").bind(...bindSince).all(),
   ]);
 
   stats.pageviews = pvRow ? pvRow.c : 0;
