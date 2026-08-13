@@ -43,17 +43,17 @@
   });
   window.addEventListener("pagehide", reportDwell);
 
-  // 3) 点击量（文章/页面链接点击 + 外部广告点击）
+  // 3) 点击量（文章/页面链接点击 + 广告点击）
+  // 广告为点击任意处跳转型（iclick 弹窗/跳转），页面无可见广告横幅，
+  // 因此所有页面点击都记为广告点击 ad_click；站内文章链接点击另计为 click。
   document.addEventListener("click", function (e) {
     var a = e.target.closest("a");
-    if (!a) return;
-    var href = a.getAttribute("href") || "";
+    var href = (a && a.getAttribute("href")) || "";
     var isArticle = /\.html/.test(href);
-    var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.hostname) === -1;
     if (isArticle) {
       send({ type: "click", page: page, target: href });
-    } else if (isExternal) {
-      send({ type: "ad_click", page: page, target: href });
     }
+    // 无论点击什么位置，都视为一次广告触发
+    send({ type: "ad_click", page: page, target: href || "page-click" });
   });
 })();
