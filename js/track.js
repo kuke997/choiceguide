@@ -46,8 +46,14 @@
   // 3) 点击量（文章/页面链接点击 + 广告点击）
   // 广告为点击任意处跳转型（iclick 弹窗/跳转），页面无可见广告横幅，
   // 因此所有页面点击都记为广告点击 ad_click；站内文章链接点击另计为 click。
-  document.addEventListener("click", function (e) {
-    var a = e.target.closest("a");
+  // 使用捕获阶段监听，确保在广告脚本劫持点击/跳转之前先完成上报。
+  // 同时监听 click 与 pointerdown（兼容被 preventDefault 的点击），用时间戳去重。
+  var lastClickTs = 0;
+  function onAnyClick(e) {
+    var now = Date.now();
+    if (now - lastClickTs < 300) return; // pointerdown 已统计，跳过紧随的 click
+    lastClickTs = now;
+    var a = e.target && e.target.closest ? e.target.closest("a") : null;
     var href = (a && a.getAttribute("href")) || "";
     var isArticle = /\.html/.test(href);
     if (isArticle) {
@@ -55,5 +61,8 @@
     }
     // 无论点击什么位置，都视为一次广告触发
     send({ type: "ad_click", page: page, target: href || "page-click" });
-  });
+  }
+  document.addEventListener("click", onAnyClick, true);
+  // 兼容点击被广告脚本 preventDefault 的场景：pointerdown 在 click 之前触发
+  document.addEventListener("pointerdown", onAnyClick, true);
 })();
